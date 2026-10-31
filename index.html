@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Kart Savar: PVP Düellosu & Emojiler</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PeerJS for Free WebRTC Multiplayer Rooms -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    @keyframes pulse-energy {
+      0%, 100% { opacity: 0.9; }
+      50% { opacity: 1; filter: drop-shadow(0 0 10px #38bdf8); }
+    }
+    @keyframes double-pulse {
+      0%, 100% { box-shadow: inset 0 0 15px rgba(234, 179, 8, 0.4); }
+      50% { box-shadow: inset 0 0 30px rgba(239, 68, 68, 0.8), 0 0 20px rgba(234, 179, 8, 0.6); }
+    }
+    @keyframes float-emoji {
+      0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+      20% { transform: translate(-50%, -20px) scale(1.3); opacity: 1; }
+      80% { transform: translate(-50%, -80px) scale(1.1); opacity: 1; }
+      100% { transform: translate(-50%, -120px) scale(0.8); opacity: 0; }
+    }
+    .energy-bar-glow {
+      animation: pulse-energy 1.5s infinite;
+    }
+    .arena-2x-active {
+      animation: double-pulse 1s infinite alternate;
+      border-color: #f59e0b !important;
+    }
+    .cooldown-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 1rem;
+      pointer-events: none;
+      transition: height 0.1s linear;
+    }
+    .floating-emoji {
+      position: absolute;
+      left: 50%;
+      bottom: 25%;
+      font-size: 3.5rem;
+      pointer-events: none;
+      animation: float-emoji 2s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+      z-index: 60;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.7));
+    }
+    .opp-emoji {
+      bottom: 60% !important;
+    }
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-white font-sans antialiased min-h-screen flex items-center justify-center p-2 sm:p-4">
+
+  <!-- Main Game Frame -->
+  <div id="gameFrame" class="relative w-full max-w-md bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 border-2 border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[740px] transition-all duration-300">
+
+    <!-- Floating Emojis Container -->
+    <div id="emojiArena" class="absolute inset-0 pointer-events-none z-50 overflow-hidden"></div>
+
+    <!-- ========================================== -->
+    <!-- SCREEN 1: LOBBY / MENU (Oda & Kozmetik)   -->
+    <!-- ========================================== -->
+    <div id="lobbyScreen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-between p-5 z-40 transition-opacity duration-300 overflow-y-auto">
+      
+      <!-- Header -->
+      <div class="text-center mt-2">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-xs font-bold mb-2">
+          <span>⚡</span> 1v1 Kart Düellosu & Emojiler
+        </div>
+        <h1 class="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-rose-400 to-indigo-400">
+          KART SAVAR
+        </h1>
+        <p class="text-[11px] text-slate-400 mt-0.5">
+          Clash Royale tarzı süreli enerji, 2X ani ölüm modu ve arkadaş odaları!
+        </p>
+      </div>
+
+      <!-- Player Name -->
+      <div class="w-full max-w-xs">
+        <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Oyuncu Adın</label>
+        <input id="playerNameInput" type="text" maxlength="12" value="SavarUstası" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold text-center text-sm focus:border-amber-400 focus:outline-none">
+      </div>
+
+      <!-- FEATURE 4: THEME / COSMETIC SELECTOR (Açılabilir Görünümler) -->
+      <div class="w-full max-w-xs bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-amber-400 flex items-center gap-1">
+            <span>🎨</span> Kart & Arena Teması
+          </span>
+          <span id="selectedThemeLabel" class="text-[10px] text-slate-400 font-mono font-bold">Klasik Şık</span>
+        </div>
+        <div class="grid grid-cols-4 gap-1.5">
+          <button onclick="setSkin('classic')" class="skin-btn p-1.5 rounded-xl border-2 border-amber-400 bg-slate-800 text-center flex flex-col items-center text-[10px] active:scale-95">
+            <span class="text-base">🌌</span>
+            <span class="font-bold text-slate-200 mt-0.5 text-[9px]">Klasik</span>
+          </button>
+          <button onclick="setSkin('neon')" class="skin-btn p-1.5 rounded-xl border border-slate-700 bg-slate-800 text-center flex flex-col items-center text-[10px] active:scale-95">
+            <span class="text-base">🔮</span>
+            <span class="font-bold text-slate-200 mt-0.5 text-[9px]">Neon</span>
+          </button>
+          <button onclick="setSkin('gold')" class="skin-btn p-1.5 rounded-xl border border-slate-700 bg-slate-800 text-center flex flex-col items-center text-[10px] active:scale-95">
+            <span class="text-base">👑</span>
+            <span class="font-bold text-slate-200 mt-0.5 text-[9px]">Altın</span>
+          </button>
+          <button onclick="setSkin('lava')" class="skin-btn p-1.5 rounded-xl border border-slate-700 bg-slate-800 text-center flex flex-col items-center text-[10px] active:scale-95">
+            <span class="text-base">🌋</span>
+            <span class="font-bold text-slate-200 mt-0.5 text-[9px]">Lav</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Lobby Action Buttons -->
+      <div class="w-full max-w-xs space-y-2.5">
+        <button onclick="startBotMatch()" class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 font-black text-sm tracking-wide shadow-lg shadow-indigo-500/25 active:scale-95 flex items-center justify-center gap-2">
+          <span>🤖</span> Bot Rakiple Pratik Yap
+        </button>
+
+        <div class="relative flex py-0.5 items-center">
+          <div class="flex-grow border-t border-slate-800"></div>
+          <span class="flex-shrink mx-2 text-slate-500 text-[10px] font-bold uppercase tracking-wider">Arkadaşınla Oyna</span>
+          <div class="flex-grow border-t border-slate-800"></div>
+        </div>
+
+        <button onclick="createRoom()" class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-sm tracking-wide shadow-lg shadow-yellow-500/25 active:scale-95 flex items-center justify-center gap-2">
+          <span>👑</span> Oda Oluştur (Link Paylaş)
+        </button>
+
+        <div class="flex gap-2">
+          <input id="roomCodeInput" type="text" placeholder="Oda Kodu (örn: SAVAR12)" class="w-2/3 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-center font-mono font-bold text-xs uppercase focus:border-emerald-400 focus:outline-none">
+          <button onclick="joinRoom()" class="w-1/3 py-2 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-black text-xs tracking-wide active:scale-95">
+            Katıl
+          </button>
+        </div>
+      </div>
+
+      <!-- Fair Play Tag -->
+      <div class="text-[11px] text-emerald-400/80 flex items-center gap-1 font-medium pb-1">
+        <span>🛡️</span> Sıfır kumar, sıfır para yatırma • Saf strateji ve refleks!
+      </div>
+    </div>
+
+    <!-- ROOM WAITING MODAL -->
+    <div id="roomWaitModal" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 z-50 hidden text-center">
+      <div class="text-4xl animate-bounce mb-2">📡</div>
+      <h3 class="text-xl font-black text-amber-400 mb-1">ODA OLUŞTURULDU!</h3>
+      <p class="text-slate-400 text-xs mb-4">Bu kodu arkadaşına gönder veya linki kopyala:</p>
+      
+      <div class="px-5 py-3 rounded-2xl bg-slate-900 border-2 border-amber-400/50 mb-3">
+        <span id="createdRoomCode" class="font-mono text-2xl font-black tracking-widest text-yellow-300">SAVAR-0000</span>
+      </div>
+
+      <button onclick="copyInviteLink()" id="copyLinkBtn" class="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs mb-4 flex items-center gap-2">
+        <span>📋</span> Davet Linkini Kopyala
+      </button>
+
+      <div class="flex items-center gap-2 text-xs text-slate-400 animate-pulse">
+        <div class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+        Arkadaşın bekleniyor...
+      </div>
+
+      <button onclick="cancelRoom()" class="mt-6 text-xs text-rose-400 underline">İptal Et</button>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- SCREEN 2: BATTLE ARENA (1v1 DÜELLO)       -->
+    <!-- ========================================== -->
+
+    <!-- Top Bar: Opponent Info, Match Timer & HP -->
+    <div class="px-4 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between z-10">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-xs font-bold text-rose-400">
+          👾
+        </div>
+        <div>
+          <div id="opponentName" class="text-xs font-black text-rose-400">Rakip</div>
+          <div class="text-[10px] text-slate-400 font-mono">HP: <span id="oppHpText" class="font-bold text-white">100</span></div>
+        </div>
+      </div>
+
+      <!-- FEATURE 3: MATCH TIMER & 2X BADGE -->
+      <div class="text-center">
+        <div id="matchTimerDisplay" class="font-mono font-black text-xs text-amber-300 bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-700">01:30</div>
+        <div id="doubleElixirBadge" class="text-[9px] font-black text-amber-400 uppercase tracking-widest hidden animate-pulse mt-0.5">⚡ 2X ENERJİ!</div>
+      </div>
+
+      <!-- Opponent HP Bar -->
+      <div class="w-28 sm:w-32 bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
+        <div id="oppHpBar" class="bg-gradient-to-r from-rose-500 to-red-500 h-full w-full transition-all duration-300"></div>
+      </div>
+    </div>
+
+    <!-- Battle Canvas Area -->
+    <div id="arenaBox" class="relative flex-1 w-full overflow-hidden bg-radial from-indigo-950/40 to-slate-950 transition-all duration-300">
+      <canvas id="battleCanvas" class="w-full h-full block"></canvas>
+
+      <!-- Center Divider -->
+      <div class="absolute top-1/2 left-0 right-0 h-[2px] bg-indigo-500/30 border-b border-dashed border-indigo-400/40 pointer-events-none flex justify-center">
+        <span class="text-[9px] text-indigo-300/60 uppercase tracking-widest -mt-3.5 bg-slate-900/80 px-2 rounded font-mono">SAVAR DÜELLO HATTI</span>
+      </div>
+
+      <!-- Player Defense Line -->
+      <div class="absolute bottom-2 left-0 right-0 h-[2px] bg-amber-500/30 border-b border-dashed border-amber-500/50 pointer-events-none flex justify-center">
+        <span class="text-[9px] text-amber-400/60 uppercase tracking-widest -mt-3.5 bg-slate-900/80 px-2 rounded font-mono">SAVUNMA HATTIN</span>
+      </div>
+
+      <!-- Floating Combat Banner -->
+      <div id="battleBanner" class="absolute top-1/3 left-1/2 -translate-x-1/2 pointer-events-none transition-all duration-300 opacity-0 transform scale-75 text-center z-20">
+        <div id="battleBannerText" class="text-2xl font-black text-yellow-300 drop-shadow-[0_4px_12px_rgba(234,179,8,0.9)]">SAVAR PATLAMASI!</div>
+      </div>
+
+      <!-- FEATURE 1: QUICK IN-MATCH EMOJI BAR (Clash Royale Style) -->
+      <div class="absolute left-2 bottom-4 z-30 flex flex-col gap-1.5 bg-slate-900/80 backdrop-blur p-1 rounded-2xl border border-slate-700 shadow-xl">
+        <button onclick="triggerEmoji('😂')" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-base active:scale-125 transition-transform" title="Gülme">😂</button>
+        <button onclick="triggerEmoji('😱')" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-base active:scale-125 transition-transform" title="Şaşırma">😱</button>
+        <button onclick="triggerEmoji('👍')" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-base active:scale-125 transition-transform" title="Tebrik">👍</button>
+        <button onclick="triggerEmoji('🔥')" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-base active:scale-125 transition-transform" title="Alev">🔥</button>
+      </div>
+    </div>
+
+    <!-- Bottom Bar: Player Health & Energy -->
+    <div class="px-4 py-1.5 bg-slate-900/95 border-t border-slate-800 z-10">
+      <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center gap-2">
+          <div class="text-xs font-black text-amber-400" id="selfName">Sen</div>
+          <div class="text-[10px] text-slate-400 font-mono">HP: <span id="selfHpText" class="font-bold text-white">100</span></div>
+        </div>
+        <div class="w-28 sm:w-32 bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
+          <div id="selfHpBar" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full w-full transition-all duration-300"></div>
+        </div>
+      </div>
+
+      <!-- Energy (Elixir) Bar -->
+      <div class="flex items-center gap-2 mt-1">
+        <div class="flex items-center gap-1 font-black text-xs text-sky-400 min-w-[40px]">
+          <span>⚡</span>
+          <span id="energyNum">5</span>/10
+        </div>
+        <div class="flex-1 bg-slate-800 h-3.5 rounded-full overflow-hidden p-0.5 border border-sky-500/40">
+          <div id="energyFill" class="bg-gradient-to-r from-sky-500 via-cyan-400 to-blue-500 h-full rounded-full transition-all duration-100 energy-bar-glow" style="width: 50%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player Card Deck (4 Slots) -->
+    <div class="p-3 bg-slate-900 border-t border-slate-800/80 z-10">
+      <div id="cardsGrid" class="grid grid-cols-4 gap-2"></div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- SCREEN 3: GAME OVER / RESULT               -->
+    <!-- ========================================== -->
+    <div id="resultModal" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 z-50 hidden text-center">
+      <div id="resultIcon" class="text-6xl mb-2">🏆</div>
+      <h2 id="resultTitle" class="text-3xl font-black text-amber-400 mb-1">ZAFER!</h2>
+      <p id="resultSubtitle" class="text-slate-400 text-xs mb-6">Müthiş savuşturmalarla rakibini yendin!</p>
+
+      <button onclick="watchBattleReward()" class="w-full max-w-xs py-3.5 px-4 mb-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2">
+        <span>🎬</span> Reklam İzle & 2 Kat Kupa Kazan
+      </button>
+
+      <button onclick="returnToLobby()" class="w-full max-w-xs py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm tracking-wide">
+        Ana Menüye Dön
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    // --- Audio Synthesis (Web Audio API) ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function playSfx(freq, type = 'sine', duration = 0.12, gainVal = 0.15) {
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch(e) {}
+    }
+
+    // --- FEATURE 4: SKIN / THEME SETTINGS ---
+    let currentSkin = 'classic';
+    const SKINS = {
+      classic: { name: 'Klasik Şık', cardBg: '#1e293b', border: '#38bdf8', glow: 'rgba(56, 189, 248, 0.4)' },
+      neon: { name: 'Neon Siber', cardBg: '#2e1065', border: '#d946ef', glow: 'rgba(217, 70, 239, 0.5)' },
+      gold: { name: 'Kraliyet Altını', cardBg: '#451a03', border: '#f59e0b', glow: 'rgba(245, 158, 11, 0.6)' },
+      lava: { name: 'Lav Kıvılcımı', cardBg: '#450a0a', border: '#ef4444', glow: 'rgba(239, 68, 68, 0.5)' }
+    };
+
+    function setSkin(skinKey) {
+      currentSkin = skinKey;
+      document.getElementById('selectedThemeLabel').innerText = SKINS[skinKey].name;
+      document.querySelectorAll('.skin-btn').forEach(btn => {
+        btn.classList.remove('border-amber-400');
+        btn.classList.add('border-slate-700');
+      });
+      event.currentTarget.classList.add('border-amber-400');
+      event.currentTarget.classList.remove('border-slate-700');
+      renderDeckUI();
+    }
+
+    // --- Card Definitions ---
+    const DECK_CARDS = [
+      { id: 'water_shield', name: 'Su Kalkanı', icon: '💧', cost: 1, cooldown: 1800, color: 'from-sky-500 to-blue-600', border: 'border-sky-400', role: 'counter_fire', desc: 'Ateşi Savar' },
+      { id: 'fire_bolt', name: 'Ateş Oku', icon: '🔥', cost: 2, cooldown: 2400, color: 'from-rose-500 to-red-600', border: 'border-rose-400', role: 'attack', desc: 'Hızlı Saldırı' },
+      { id: 'nature_gust', name: 'Rüzgar Savar', icon: '🍃', cost: 2, cooldown: 2500, color: 'from-emerald-500 to-green-600', border: 'border-emerald-400', role: 'counter_thunder', desc: 'Şimşeği Savar' },
+      { id: 'thunder_strike', name: 'Yıldırım', icon: '⚡', cost: 3, cooldown: 3200, color: 'from-amber-400 to-yellow-500', border: 'border-amber-300', role: 'heavy_attack', desc: 'Güçlü Vuruş' },
+      { id: 'super_ward', name: 'Süper Kalkan', icon: '🌟', cost: 4, cooldown: 4500, color: 'from-purple-500 to-indigo-600', border: 'border-purple-300', role: 'super', desc: 'Her Şeyi Savar' }
+    ];
+
+    // State
+    let isMultiplayer = false;
+    let isBotMode = false;
+    let peer = null;
+    let conn = null;
+    let myPlayerName = "Oyuncu";
+    let oppPlayerName = "Rakip";
+
+    let selfHp = 100;
+    let oppHp = 100;
+    let energy = 5.0;
+    const MAX_ENERGY = 10;
+    let energyRegenRate = 0.8;
+    let isDoubleElixir = false;
+
+    // Timer (90 seconds total)
+    let matchTimeRemaining = 90;
+    let matchTimerInterval = null;
+
+    let activeCards = [];
+    let particles = [];
+    let isMatchOver = false;
+
+    let playerHand = [
+      { card: DECK_CARDS[0], readyAt: 0 },
+      { card: DECK_CARDS[1], readyAt: 0 },
+      { card: DECK_CARDS[2], readyAt: 0 },
+      { card: DECK_CARDS[3], readyAt: 0 }
+    ];
+
+    const canvas = document.getElementById('battleCanvas');
+    const ctx = canvas.getContext('2d');
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // --- FEATURE 1: EMOJI TRIGGER & DISPLAY ---
+    function triggerEmoji(emoji, isOpponent = false) {
+      initAudio();
+      playSfx(isOpponent ? 500 : 700, 'triangle', 0.15, 0.2);
+
+      const arena = document.getElementById('emojiArena');
+      const el = document.createElement('div');
+      el.className = `floating-emoji ${isOpponent ? 'opp-emoji' : ''}`;
+      el.innerText = emoji;
+      arena.appendChild(el);
+
+      setTimeout(() => el.remove(), 2100);
+
+      if (!isOpponent && isMultiplayer && conn && conn.open) {
+        conn.send({ type: 'emoji', emoji: emoji });
+      }
+
+      if (!isOpponent && isBotMode && Math.random() > 0.4) {
+        setTimeout(() => {
+          const botEmojis = ['😂', '🔥', '😱', '👍'];
+          const rand = botEmojis[Math.floor(Math.random() * botEmojis.length)];
+          triggerEmoji(rand, true);
+        }, 800 + Math.random() * 800);
+      }
+    }
+
+    // --- FEATURE 3: MATCH TIMER & 2X DOUBLE ENERGY ---
+    function startMatchTimer() {
+      matchTimeRemaining = 90;
+      isDoubleElixir = false;
+      energyRegenRate = 0.8;
+      document.getElementById('doubleElixirBadge').classList.add('hidden');
+      document.getElementById('arenaBox').classList.remove('arena-2x-active');
+      updateTimerUI();
+
+      clearInterval(matchTimerInterval);
+      matchTimerInterval = setInterval(() => {
+        if (isMatchOver) {
+          clearInterval(matchTimerInterval);
+          return;
+        }
+
+        matchTimeRemaining--;
+        updateTimerUI();
+
+        if (matchTimeRemaining === 45 && !isDoubleElixir) {
+          activateDoubleElixir();
+        }
+
+        if (matchTimeRemaining <= 0) {
+          clearInterval(matchTimerInterval);
+          if (selfHp > oppHp) endGame(true);
+          else if (oppHp > selfHp) endGame(false);
+          else {
+            showBattleBanner("⏱️ ANİ ÖLÜM! İLK VURAN KAZANIR!");
+          }
+        }
+      }, 1000);
+    }
+
+    function activateDoubleElixir() {
+      isDoubleElixir = true;
+      energyRegenRate = 1.6;
+      playSfx(880, 'sine', 0.3, 0.3);
+      setTimeout(() => playSfx(1100, 'sine', 0.4, 0.3), 150);
+
+      document.getElementById('doubleElixirBadge').classList.remove('hidden');
+      document.getElementById('arenaBox').classList.add('arena-2x-active');
+      showBattleBanner("⚡ 2X ÇİFT ENERJİ BAŞLADI!");
+    }
+
+    function updateTimerUI() {
+      const mins = Math.floor(matchTimeRemaining / 60);
+      const secs = matchTimeRemaining % 60;
+      document.getElementById('matchTimerDisplay').innerText = 
+        `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function renderDeckUI() {
+      const grid = document.getElementById('cardsGrid');
+      grid.innerHTML = '';
+      const now = performance.now();
+
+      playerHand.forEach((slot, index) => {
+        const c = slot.card;
+        const isOnCooldown = now < slot.readyAt;
+        const cooldownRemaining = Math.max(0, slot.readyAt - now);
+        const cooldownRatio = isOnCooldown ? (cooldownRemaining / c.cooldown) : 0;
+        const canAfford = energy >= c.cost && !isOnCooldown;
+
+        const btn = document.createElement('button');
+        btn.onclick = () => playCardSlot(index);
+        btn.className = `relative aspect-[3/4] rounded-2xl flex flex-col items-center justify-between p-2 border-2 shadow-lg transition-transform overflow-hidden ${
+          canAfford ? 'active:scale-95 hover:-translate-y-1 cursor-pointer ' + c.border + ' bg-gradient-to-br ' + c.color : 'opacity-50 grayscale cursor-not-allowed border-slate-700 bg-slate-800'
+        }`;
+
+        btn.innerHTML = `
+          <div class="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-sky-500 text-slate-950 font-black text-[10px] flex items-center gap-0.5 shadow">
+            <span>⚡</span><span>${c.cost}</span>
+          </div>
+          <span class="text-2xl mt-4">${c.icon}</span>
+          <div class="text-center w-full">
+            <div class="text-[10px] font-black tracking-tight leading-tight truncate">${c.name}</div>
+            <div class="text-[8px] opacity-75 font-bold uppercase">${c.desc}</div>
+          </div>
+          ${isOnCooldown ? `
+            <div class="cooldown-overlay" style="height: ${cooldownRatio * 100}%"></div>
+            <div class="absolute inset-0 flex items-center justify-center font-black text-xs text-white drop-shadow">
+              ${(cooldownRemaining / 1000).toFixed(1)}s
+            </div>
+          ` : ''}
+        `;
+
+        grid.appendChild(btn);
+      });
+    }
+
+    function playCardSlot(index) {
+      if (isMatchOver) return;
+      initAudio();
+      const now = performance.now();
+      const slot = playerHand[index];
+      if (!slot) return;
+      const c = slot.card;
+
+      if (now < slot.readyAt) return;
+      if (energy < c.cost) {
+        playSfx(150, 'sawtooth', 0.15);
+        return;
+      }
+
+      energy -= c.cost;
+      slot.readyAt = now + c.cooldown;
+      playSfx(440, 'triangle', 0.12, 0.2);
+
+      const newCard = {
+        id: 'self_' + Date.now() + Math.random(),
+        type: c.id,
+        name: c.name,
+        icon: c.icon,
+        owner: 'self',
+        x: canvas.width / 2 - 28 + (index - 1.5) * 45,
+        y: canvas.height - 75,
+        speed: c.role === 'fire_bolt' ? 3.6 : 2.5,
+        damage: c.cost * 10,
+        deflected: false
+      };
+
+      activeCards.push(newCard);
+
+      if (isMultiplayer && conn && conn.open) {
+        conn.send({
+          type: 'spawn_card',
+          card: {
+            id: newCard.id,
+            type: c.id,
+            name: c.name,
+            icon: c.icon,
+            damage: newCard.damage,
+            speed: newCard.speed,
+            relX: newCard.x / canvas.width
+          }
+        });
+      }
+
+      renderDeckUI();
+    }
+
+    let botNextPlayTime = performance.now() + 2000;
+    let botEnergy = 5.0;
+
+    function updateBotAI(now) {
+      if (!isBotMode || isMatchOver) return;
+
+      const rate = isDoubleElixir ? 0.03 : 0.015;
+      if (botEnergy < MAX_ENERGY) botEnergy += rate;
+
+      if (now > botNextPlayTime) {
+        botNextPlayTime = now + (isDoubleElixir ? 1000 : 1800) + Math.random() * 1200;
+        const randCard = DECK_CARDS[Math.floor(Math.random() * DECK_CARDS.length)];
+        if (botEnergy >= randCard.cost) {
+          botEnergy -= randCard.cost;
+
+          const oppCard = {
+            id: 'bot_' + Date.now() + Math.random(),
+            type: randCard.id,
+            name: randCard.name,
+            icon: randCard.icon,
+            owner: 'opp',
+            x: 25 + Math.random() * (canvas.width - 70),
+            y: 20,
+            speed: randCard.role === 'fire_bolt' ? 3.3 : 2.3,
+            damage: randCard.cost * 10,
+            deflected: false
+          };
+          activeCards.push(oppCard);
+        }
+      }
+    }
+
+    function checkCollisions() {
+      for (let i = 0; i < activeCards.length; i++) {
+        const c1 = activeCards[i];
+        if (c1.deflected || c1.owner !== 'self') continue;
+
+        for (let j = 0; j < activeCards.length; j++) {
+          const c2 = activeCards[j];
+          if (c2.deflected || c2.owner !== 'opp') continue;
+
+          const dx = (c1.x + 28) - (c2.x + 28);
+          const dy = (c1.y + 37) - (c2.y + 37);
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 42) {
+            const isCounter = (c1.type === 'water_shield' && c2.type === 'fire_bolt') ||
+                              (c1.type === 'nature_gust' && c2.type === 'thunder_strike') ||
+                              (c1.type === 'super_ward') ||
+                              (c1.type === c2.type);
+
+            if (isCounter) {
+              c2.deflected = true;
+              c1.deflected = true;
+              spawnParticles((c1.x + c2.x)/2 + 28, (c1.y + c2.y)/2 + 37, '#facc15');
+              playSfx(780, 'triangle', 0.2, 0.25);
+              showBattleBanner("⚔️ MÜKEMMEL SAVAR!");
+              energy = Math.min(MAX_ENERGY, energy + 1.0);
+            } else {
+              c1.deflected = true;
+              c2.deflected = true;
+              spawnParticles((c1.x + c2.x)/2 + 28, (c1.y + c2.y)/2 + 37, '#ef4444');
+              playSfx(250, 'sawtooth', 0.2, 0.2);
+            }
+          }
+        }
+      }
+
+      for (let i = activeCards.length - 1; i >= 0; i--) {
+        const card = activeCards[i];
+        if (card.deflected) continue;
+
+        if (card.owner === 'opp' && card.y >= canvas.height - 40) {
+          card.deflected = true;
+          selfHp = Math.max(0, selfHp - card.damage);
+          spawnParticles(card.x + 28, canvas.height - 20, '#ef4444');
+          playSfx(140, 'sawtooth', 0.3, 0.3);
+          updateHpUI();
+          if (selfHp <= 0) endGame(false);
+        }
+
+        if (card.owner === 'self' && card.y <= 30) {
+          card.deflected = true;
+          oppHp = Math.max(0, oppHp - card.damage);
+          spawnParticles(card.x + 28, 30, '#10b981');
+          playSfx(620, 'sine', 0.2, 0.25);
+          updateHpUI();
+          if (oppHp <= 0) endGame(true);
+        }
+      }
+    }
+
+    function spawnParticles(x, y, color) {
+      for (let i = 0; i < 18; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = 2 + Math.random() * 4;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd,
+          life: 1,
+          decay: 0.04 + Math.random() * 0.03,
+          color
+        });
+      }
+    }
+
+    function showBattleBanner(text) {
+      const banner = document.getElementById('battleBanner');
+      const bannerText = document.getElementById('battleBannerText');
+      bannerText.innerText = text;
+      banner.style.opacity = '1';
+      banner.style.transform = 'translate(-50%, -10px) scale(1.1)';
+      clearTimeout(banner._t);
+      banner._t = setTimeout(() => {
+        banner.style.opacity = '0';
+        banner.style.transform = 'translate(-50%, 0px) scale(0.7)';
+      }, 700);
+    }
+
+    function updateHpUI() {
+      document.getElementById('selfHpText').innerText = selfHp;
+      document.getElementById('selfHpBar').style.width = selfHp + '%';
+      document.getElementById('oppHpText').innerText = oppHp;
+      document.getElementById('oppHpBar').style.width = oppHp + '%';
+    }
+
+    function endGame(isWinner) {
+      isMatchOver = true;
+      clearInterval(matchTimerInterval);
+      const modal = document.getElementById('resultModal');
+      const title = document.getElementById('resultTitle');
+      const sub = document.getElementById('resultSubtitle');
+      const icon = document.getElementById('resultIcon');
+
+      modal.classList.remove('hidden');
+      if (isWinner) {
+        icon.innerText = "🏆";
+        title.innerText = "ZAFER SENİN!";
+        title.className = "text-3xl font-black text-amber-400 mb-1";
+        sub.innerText = "Rakibin kalesini yıktın ve savar ustası oldun!";
+        playSfx(880, 'sine', 0.4, 0.3);
+      } else {
+        icon.innerText = "💔";
+        title.innerText = "BOZGUN!";
+        title.className = "text-3xl font-black text-rose-500 mb-1";
+        sub.innerText = "Bir dahaki sefere daha hızlı savuştur!";
+        playSfx(160, 'sawtooth', 0.4, 0.3);
+      }
+    }
+
+    function returnToLobby() {
+      document.getElementById('resultModal').classList.add('hidden');
+      document.getElementById('lobbyScreen').classList.remove('hidden');
+      clearInterval(matchTimerInterval);
+      isMatchOver = true;
+      activeCards = [];
+      particles = [];
+    }
+
+    function watchBattleReward() {
+      alert("🎬 5 saniyelik simüle reklam izlendi! +50 Kupa & 100 Altın hesabına eklendi (Para yatırmadan adil ödül!).");
+      returnToLobby();
+    }
+
+    let lastLoopTime = performance.now();
+
+    function gameLoop(now) {
+      const dt = (now - lastLoopTime) / 1000;
+      lastLoopTime = now;
+
+      if (!isMatchOver && energy < MAX_ENERGY) {
+        energy = Math.min(MAX_ENERGY, energy + energyRegenRate * dt);
+        document.getElementById('energyNum').innerText = Math.floor(energy);
+        document.getElementById('energyFill').style.width = (energy / MAX_ENERGY * 100) + '%';
+      }
+
+      renderDeckUI();
+      updateBotAI(now);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (!isMatchOver) {
+        checkCollisions();
+
+        for (let i = activeCards.length - 1; i >= 0; i--) {
+          const c = activeCards[i];
+
+          if (c.deflected) {
+            c.y += c.owner === 'self' ? 4 : -4;
+            activeCards.splice(i, 1);
+            continue;
+          }
+
+          if (c.owner === 'self') {
+            c.y -= c.speed;
+          } else {
+            c.y += c.speed;
+          }
+
+          drawCardOnCanvas(c);
+        }
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function drawCardOnCanvas(c) {
+      ctx.save();
+      ctx.translate(c.x, c.y);
+
+      const skinData = SKINS[currentSkin];
+      ctx.fillStyle = c.owner === 'self' ? skinData.cardBg : '#334155';
+      ctx.strokeStyle = c.owner === 'self' ? skinData.border : '#f43f5e';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = c.owner === 'self' ? skinData.glow : 'rgba(244, 63, 94, 0.4)';
+      ctx.shadowBlur = 8;
+
+      ctx.beginPath();
+      ctx.roundRect(0, 0, 56, 74, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.font = '22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.icon, 28, 35);
+
+      ctx.font = 'bold 9px sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(c.name, 28, 55);
+
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = c.owner === 'self' ? skinData.border : '#f43f5e';
+      ctx.fillText(c.owner === 'self' ? '▲' : '▼', 28, 68);
+
+      ctx.restore();
+    }
+
+    function startBotMatch() {
+      myPlayerName = document.getElementById('playerNameInput').value || "Sen";
+      oppPlayerName = "Robot_Savar (Yapay Zeka)";
+
+      document.getElementById('selfName').innerText = myPlayerName;
+      document.getElementById('opponentName').innerText = oppPlayerName;
+
+      isMultiplayer = false;
+      isBotMode = true;
+      resetMatch();
+      document.getElementById('lobbyScreen').classList.add('hidden');
+      startMatchTimer();
+    }
+
+    function resetMatch() {
+      selfHp = 100;
+      oppHp = 100;
+      energy = 5.0;
+      activeCards = [];
+      particles = [];
+      isMatchOver = false;
+      updateHpUI();
+    }
+
+    function createRoom() {
+      myPlayerName = document.getElementById('playerNameInput').value || "Oyuncu_1";
+      document.getElementById('selfName').innerText = myPlayerName;
+
+      const randomId = 'SAVAR' + Math.floor(1000 + Math.random() * 9000);
+      document.getElementById('createdRoomCode').innerText = randomId;
+      document.getElementById('roomWaitModal').classList.remove('hidden');
+
+      if (!peer && window.Peer) {
+        peer = new Peer(randomId);
+        peer.on('connection', (c) => {
+          conn = c;
+          setupMultiplayerConnection();
+        });
+        peer.on('error', (err) => console.warn(err));
+      }
+    }
+
+    function joinRoom() {
+      const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
+      if (!code) {
+        alert("Lütfen bir oda kodu girin!");
+        return;
+      }
+
+      myPlayerName = document.getElementById('playerNameInput').value || "Oyuncu_2";
+      document.getElementById('selfName').innerText = myPlayerName;
+
+      if (!peer && window.Peer) {
+        peer = new Peer();
+        peer.on('open', () => {
+          conn = peer.connect(code);
+          setupMultiplayerConnection();
+        });
+      }
+    }
+
+    function setupMultiplayerConnection() {
+      conn.on('open', () => {
+        document.getElementById('roomWaitModal').classList.add('hidden');
+        document.getElementById('lobbyScreen').classList.add('hidden');
+        isMultiplayer = true;
+        isBotMode = false;
+        resetMatch();
+        startMatchTimer();
+
+        conn.send({ type: 'handshake', name: myPlayerName });
+      });
+
+      conn.on('data', (data) => {
+        if (data.type === 'handshake') {
+          oppPlayerName = data.name || "Arkadaşın";
+          document.getElementById('opponentName').innerText = oppPlayerName;
+        }
+
+        if (data.type === 'emoji') {
+          triggerEmoji(data.emoji, true);
+        }
+
+        if (data.type === 'spawn_card') {
+          activeCards.push({
+            id: data.card.id,
+            type: data.card.type,
+            name: data.card.name,
+            icon: data.card.icon,
+            owner: 'opp',
+            x: (1 - data.card.relX) * canvas.width - 56,
+            y: 20,
+            speed: data.card.speed,
+            damage: data.card.damage,
+            deflected: false
+          });
+        }
+      });
+    }
+
+    function copyInviteLink() {
+      const code = document.getElementById('createdRoomCode').innerText;
+      const url = window.location.href.split('#')[0] + '?room=' + code;
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = document.getElementById('copyLinkBtn');
+        btn.innerText = "✓ Kopyalandı! Arkadaşına Gönder";
+        setTimeout(() => btn.innerHTML = "<span>📋</span> Davet Linkini Kopyala", 2500);
+      }).catch(() => {
+        prompt("Oda Kodunu Arkadaşına Gönder:", code);
+      });
+    }
+
+    function cancelRoom() {
+      document.getElementById('roomWaitModal').classList.add('hidden');
+      if (peer) { peer.destroy(); peer = null; }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      const room = params.get('room');
+      if (room) {
+        document.getElementById('roomCodeInput').value = room;
+      }
+    });
+
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
